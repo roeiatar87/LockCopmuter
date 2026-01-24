@@ -1,0 +1,421 @@
+﻿<Window x:Class="LockCopmuter.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LockCopmuter - הגדרות"
+        Width="860" Height="560"
+        MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="RightToLeft"
+        Background="#0F172A">
+
+    <Window.Resources>
+
+        <!-- Text -->
+        <SolidColorBrush x:Key="TextMain" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="TextSub" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
+
+        <!-- Surfaces -->
+        <SolidColorBrush x:Key="Card" Color="#111827"/>
+        <SolidColorBrush x:Key="Card2" Color="#0B1220"/>
+        <SolidColorBrush x:Key="Border" Color="#1F2937"/>
+
+        <!-- Buttons -->
+        <SolidColorBrush x:Key="BtnBg" Color="#2563EB"/>
+        <SolidColorBrush x:Key="BtnBg2" Color="#334155"/>
+        <SolidColorBrush x:Key="BtnFg" Color="#FFFFFF"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+        </Style>
+
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="Background" Value="{StaticResource Card}"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <!-- Card-like GroupBox template -->
+        <Style TargetType="GroupBox" x:Key="CardGroupBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="14"
+                                Padding="12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="{TemplateBinding Header}"
+                                           Foreground="{StaticResource TextMain}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"/>
+
+                                <ContentPresenter Grid.Row="2"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource BtnFg}"/>
+            <Setter Property="Background" Value="{StaticResource BtnBg2}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,9"/>
+            <Setter Property="Margin" Value="0,0"/>
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd"
+        Margin="2,0"
+        Background="{TemplateBinding Background}"
+        BorderBrush="{TemplateBinding BorderBrush}"
+        BorderThickness="{TemplateBinding BorderThickness}"
+        CornerRadius="12"
+        Padding="{TemplateBinding Padding}"
+        SnapsToDevicePixels="True">
+                            <!-- זה ה-HEADER של הטאב -->
+                            <ContentPresenter x:Name="Header"
+                                      ContentSource="Header"
+                                      RecognizesAccessKey="True"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Card2}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BtnBg}"/>
+                            </Trigger>
+
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1E293B"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+
+
+
+        <!-- DataGrid -->
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{StaticResource Card2}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="RowBackground" Value="#0B1220"/>
+            <Setter Property="AlternatingRowBackground" Value="#0D1628"/>
+            <Setter Property="GridLinesVisibility" Value="None"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserResizeRows" Value="False"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#0B1220"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource Card2}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource Card2}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
+        <Style TargetType="ListBox">
+            <Setter Property="Background" Value="{StaticResource Card2}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+            <Setter Property="Padding" Value="6"/>
+        </Style>
+
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Background="{StaticResource Card}"
+                BorderBrush="{StaticResource Border}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="הגדרות" Foreground="{StaticResource TextMain}" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="קבע ימים, טווחי שעות, חריגים וסיסמה"
+                               Foreground="{StaticResource TextMuted}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Content="שמור"
+                        Background="{StaticResource BtnBg}"
+                        Command="{Binding SaveCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- Body -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ימים -->
+            <GroupBox Grid.Column="0" Style="{StaticResource CardGroupBox}" Header="ימים">
+                <ListBox ItemsSource="{Binding Rules}"
+                         SelectedItem="{Binding SelectedDay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="2">
+                                <CheckBox IsChecked="{Binding Enabled}" Margin="0,0,8,0"/>
+                                <TextBlock Text="{Binding DayHebrew}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </GroupBox>
+
+            <!-- טאבים -->
+            <GroupBox Grid.Column="2" Style="{StaticResource CardGroupBox}" Header="פרטים">
+                <TabControl Margin="2">
+
+                    <!-- זמנים -->
+                    <TabItem Header="זמנים">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <CheckBox Content="מצב בדיקה (לא מכבה באמת)"
+                                          IsChecked="{Binding Settings.IsTestMode}"
+                                          VerticalAlignment="Center"/>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="הוסף טווח" Width="110" Margin="0,0,8,0"
+                                            Command="{Binding AddRangeCommand}"/>
+                                    <Button Content="מחק טווח" Width="110"
+                                            Command="{Binding RemoveRangeCommand}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <DataGrid Grid.Row="2"
+                                      ItemsSource="{Binding SelectedDay.Ranges}"
+                                      SelectedItem="{Binding SelectedRange}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      IsReadOnly="False">
+                                <DataGrid.Columns>
+
+                                    <DataGridTemplateColumn Header="התחלה" Width="*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Start, StringFormat={}{0:hh\\:mm}}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ComboBox Width="60"
+                                                              ItemsSource="{Binding DataContext.Hours, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding StartHour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    <TextBlock Text=":" Margin="6,0"/>
+                                                    <ComboBox Width="60"
+                                                              ItemsSource="{Binding DataContext.Minutes, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding StartMinute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                    </DataGridTemplateColumn>
+
+                                    <DataGridTemplateColumn Header="סיום" Width="*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding End, StringFormat={}{0:hh\\:mm}}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ComboBox Width="60"
+                                                              ItemsSource="{Binding DataContext.Hours, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding EndHour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    <TextBlock Text=":" Margin="6,0"/>
+                                                    <ComboBox Width="60"
+                                                              ItemsSource="{Binding DataContext.Minutes, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              SelectedItem="{Binding EndMinute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                    </DataGridTemplateColumn>
+
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <!-- חריגים -->
+                    <TabItem Header="חריגים" Height="36" VerticalAlignment="Top">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8">
+
+                                <TextBlock Text="תאריך חריג (לא אוכפים ביום הזה):"
+                                           Foreground="{StaticResource TextMuted}" Margin="0,0,0,6"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+                                    <DatePicker SelectedDate="{Binding NewExceptionDate}" Width="170" Margin="0,0,8,0"/>
+                                    <Button Content="הוסף" Width="90" Command="{Binding AddExceptionDateCommand}" Margin="0,0,8,0"/>
+                                    <Button Content="מחק" Width="90" Command="{Binding RemoveExceptionDateCommand}"/>
+                                </StackPanel>
+
+                                <ListBox Height="140"
+                                         ItemsSource="{Binding Settings.ExceptionDates}"
+                                         SelectedItem="{Binding SelectedExceptionDate}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding StringFormat={}{0:dd/MM/yyyy}}"/>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Separator Margin="0,14,0,14" Background="{StaticResource Border}"/>
+
+                                <TextBlock Text="טווח (חופשה):"
+                                           Foreground="{StaticResource TextMuted}" Margin="0,0,0,6"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+                                    <DatePicker SelectedDate="{Binding NewRangeStart}" Width="150" Margin="0,0,8,0"/>
+                                    <TextBlock Text="עד" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" Margin="0,0,8,0"/>
+                                    <DatePicker SelectedDate="{Binding NewRangeEnd}" Width="150" Margin="0,0,8,0"/>
+                                    <Button Content="הוסף" Width="90" Command="{Binding AddExceptionRangeCommand}" Margin="0,0,8,0"/>
+                                    <Button Content="מחק" Width="90" Command="{Binding RemoveExceptionRangeCommand}"/>
+                                </StackPanel>
+
+                                <ListBox Height="140"
+                                         ItemsSource="{Binding Settings.ExceptionRanges}"
+                                         SelectedItem="{Binding SelectedExceptionRange}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- אבטחה -->
+                    <TabItem Header="אבטחה">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8">
+                                <GroupBox Style="{StaticResource CardGroupBox}" Header="סיסמה">
+                                    <Grid Margin="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="120"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Text="סיסמה חדשה:" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+                                        <PasswordBox x:Name="NewPwd" Grid.Row="0" Grid.Column="1" Margin="0,0,10,6"/>
+
+                                        <TextBlock Text="אימות סיסמה:" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+                                        <PasswordBox x:Name="ConfirmPwd" Grid.Row="1" Grid.Column="1" Margin="0,0,10,0"/>
+
+                                        <Button Content="עדכן"
+                                                Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
+                                                Background="{StaticResource BtnBg}"
+                                                Height="54"
+                                                Click="UpdatePassword_Click"/>
+                                    </Grid>
+                                </GroupBox>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                </TabControl>
+            </GroupBox>
+
+        </Grid>
+    </Grid>
+</Window>
