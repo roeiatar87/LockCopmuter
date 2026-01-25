@@ -1,98 +1,92 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+
 
 namespace LockCopmuter.Watchdog
 {
     internal class Program
     {
-        // ✅ תעדכן לשם המדויק שיוצא לך ב-bin
         private const string AppExeName = "LockCopmuter.exe";
         private const string AppProcessName = "LockCopmuter"; // בלי .exe
+        private static readonly TimeSpan LegitShutdownWindow = TimeSpan.FromSeconds(90); // 90 שניות "חוקיות"
 
-
+        private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
         static void Main(string[] args)
         {
-            try
+
+
+            // 1) Mutex כדי שלא יהיו 2 watchdogים במקביל
+            using var mutex = new Mutex(initiallyOwned: true, name: @"Global\LockCopmuter.Watchdog", createdNew: out bool createdNew);
+            if (!createdNew)
             {
-                Log("Watchdog started. BaseDir=" + AppContext.BaseDirectory);
-
-                if (Process.GetProcessesByName(AppProcessName).Any())
-                {
-                    Log("App already running. Exiting.");
-                    return;
-                }
-
-                using var mutex = new Mutex(false, @"Global\LockCopmuter.Watchdog");
-                if (!mutex.WaitOne(TimeSpan.FromSeconds(2)))
-                {
-                    Log("Mutex busy. Exiting.");
-                    return;
-                }
-
-                // 🔹 מציאת ה-exe
-                var exePath = Path.Combine(AppContext.BaseDirectory, "LockCopmuter.exe");
-                if (!File.Exists(exePath))
-                {
-                    Log("ERROR: LockCopmuter.exe not found in watchdog directory.");
-                    return;
-                }
-
-                Log("Found app path: " + exePath);
-
-                // 🔹 כאן בדיוק הקוד שלך
-                var psi = new ProcessStartInfo
-                {
-                    FileName = exePath,
-                    WorkingDirectory = Path.GetDirectoryName(exePath)!, // חשוב!
-                    UseShellExecute = true
-                };
-
-                var p = Process.Start(psi);
-                Log("Process.Start returned: " + (p == null ? "null" : $"PID={p.Id}"));
-
-                Thread.Sleep(1500);
-                var running = Process.GetProcessesByName(AppProcessName).Any();
-                Log("After 1.5s running=" + running);
+                Log("Another watchdog instance already running. Exiting.");
+                return;
             }
-            catch (Exception ex)
+
+            Log("Watchdog started. BaseDir=" + AppContext.BaseDirectory);
+
+            // 2) לולאה אינסופית: בדיקה כל 5 שניות
+            while (true)
             {
-                Log("FATAL: " + ex);
+                try
+                {
+                    // ✅ אם הייתה יציאה חוקית לאחרונה – לא להרים מחדש עכשיו
+                    if (WasLegitShutdownRecently())
+                    {
+                        Log("Detected recent shutdown.flag -> skipping restart this cycle.");
+                    }
+                    else
+                    {
+                        EnsureAppRunning();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log("ERROR: " + ex);
+                }
+
+                Thread.Sleep(CheckInterval);
             }
         }
 
-
-        private static string? FindExePath(string exeName)
+        private static void EnsureAppRunning()
         {
-            // 1) אותה תיקייה
-            var baseDir = AppContext.BaseDirectory;
-            var p1 = Path.Combine(baseDir, exeName);
-            if (File.Exists(p1)) return p1;
+            // אם האפליקציה כבר רצה - לא עושים כלום
+            if (Process.GetProcessesByName(AppProcessName).Any())
+                return;
 
-            // 2) תיקיית אב
-            var parent = Directory.GetParent(baseDir)?.FullName;
-            if (!string.IsNullOrWhiteSpace(parent))
+            // ✅ אם הייתה יציאה מכוונת (עם סיסמה) - לא מפעילים מחדש
+            if (IsIntentionalExit())
             {
-                var p2 = Path.Combine(parent, exeName);
-                if (File.Exists(p2)) return p2;
+                Log("Intentional exit detected → Not restarting app.");
+                return;
             }
 
-            // 3) חיפוש רקורסיבי (עד עומק סביר) ליד ה-watchdog
-            try
+            var exePath = Path.Combine(AppContext.BaseDirectory, AppExeName);
+            if (!File.Exists(exePath))
             {
-                var root = parent ?? baseDir;
-                var found = Directory
-                    .EnumerateFiles(root, exeName, SearchOption.AllDirectories)
-                    .FirstOrDefault();
-                if (found != null) return found;
+                Log($"ERROR: Missing {AppExeName} in watchdog folder. Expected: {exePath}");
+                return;
             }
-            catch { /* ignore */ }
 
-            return null;
+            Log("App not running → starting. Path=" + exePath);
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exePath,
+                WorkingDirectory = Path.GetDirectoryName(exePath)!,
+                UseShellExecute = true
+            };
+
+            var p = Process.Start(psi);
+            Log("Process.Start returned: " + (p == null ? "null" : $"PID={p.Id}"));
         }
+
 
         private static void Log(string msg)
         {
@@ -101,7 +95,94 @@ namespace LockCopmuter.Watchdog
                 var path = Path.Combine(AppContext.BaseDirectory, "watchdog.log");
                 File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
             }
-            catch { /* ignore */ }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        private static bool WasLegitShutdownRecently()
+        {
+            try
+            {
+                var flagPath = Path.Combine(AppContext.BaseDirectory, "shutdown.flag");
+                if (!File.Exists(flagPath))
+                    return false;
+
+                var text = File.ReadAllText(flagPath).Trim();
+                if (!DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var when))
+                {
+                    File.Delete(flagPath);
+                    return false;
+                }
+
+                var age = DateTime.Now - when;
+                if (age >= TimeSpan.Zero && age <= TimeSpan.FromSeconds(90))
+                {
+                    File.Delete(flagPath); // אופציונלי, אבל מומלץ
+                    return true;
+                }
+
+                File.Delete(flagPath);
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string GetSharedDir()
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "LockCopmuter");
+
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        private static bool IsIntentionalExit()
+        {
+            var flagPath = Path.Combine(GetSharedDir(), "exit.flag");
+
+            Log("Checking exit flag at: " + flagPath);
+
+            if (!File.Exists(flagPath))
+            {
+                Log("exit.flag not found.");
+                return false;
+            }
+
+            try
+            {
+                var text = File.ReadAllText(flagPath).Trim();
+                Log("exit.flag content: " + text);
+
+                // חשוב: InvariantCulture בשביל פורמט "O"
+                if (!DateTime.TryParseExact(
+                        text,
+                        "O",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind,
+                        out var when))
+                {
+                    Log("exit.flag parse FAILED.");
+                    return false;
+                }
+
+                var age = DateTime.Now - when;
+                Log($"exit.flag age: {age.TotalSeconds:0}s");
+
+                // חלון זמן "מורשה" (אפשר לשנות)
+                return age < TimeSpan.FromMinutes(2);
+            }
+            catch (Exception ex)
+            {
+                Log("exit.flag read/parse ERROR: " + ex);
+                return false;
+            }
         }
 
 

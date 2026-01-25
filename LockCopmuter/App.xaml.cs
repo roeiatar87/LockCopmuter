@@ -7,12 +7,14 @@ using LockCopmuter.ViewModels;
 using LockCopmuter.Views;
 using System.Windows.Threading;
 using MessageBox = System.Windows.MessageBox;
+using System.IO;
 namespace LockCopmuter;
 
 public partial class App : Application
 {
     private NotifyIcon? _tray;
     private MainWindow? _mainWindow;
+    private Mutex? _mutex;
 
     private readonly ISettingsService _settingsService = new SettingsService();
     private readonly ILogger _logger = new FileLogger();
@@ -31,6 +33,15 @@ public partial class App : Application
     }
     protected override void OnStartup(StartupEventArgs e)
     {
+        // ✅ 1) Singleton: לא לאפשר 2 מופעים
+        _mutex = new Mutex(true, @"Global\LockCopmuter.App", out bool createdNew);
+        if (!createdNew)
+        {
+            // כבר רץ מופע אחר
+            Shutdown();
+            return;
+        }
+
         base.OnStartup(e);
 
         _settings = _settingsService.Load();
@@ -38,8 +49,8 @@ public partial class App : Application
 
         SetupTray();
         StartEnforcementTimer();
-
     }
+
 
     private void SetupTray()
     {
@@ -91,6 +102,26 @@ public partial class App : Application
             {
                 if (!EnsureUnlocked()) return;
 
+                // ✅ 1) סימון סגירה חוקית עבור ה-Watchdog
+                try
+                {
+                    var sharedDir = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "LockCopmuter");
+
+                    System.IO.Directory.CreateDirectory(sharedDir);
+
+                    var flagPath = System.IO.Path.Combine(sharedDir, "exit.flag");
+                    System.IO.File.WriteAllText(
+                        flagPath,
+                        DateTime.Now.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+
+                    _logger.Info("Wrote exit.flag to: " + flagPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("Failed to write exit.flag", ex);
+                }
                 if (_tray != null)
                 {
                     _tray.Visible = false;
@@ -98,6 +129,7 @@ public partial class App : Application
                     _tray = null;
                 }
                 Shutdown();
+
             });
         });
 
@@ -120,6 +152,7 @@ public partial class App : Application
             _mainWindow.Activate();
         }
     }
+
 
     private bool EnsureUnlocked()
     {
@@ -150,8 +183,19 @@ public partial class App : Application
             _tray.Visible = false;
             _tray.Dispose();
         }
+
+        try
+        {
+            _mutex?.ReleaseMutex();
+        }
+        catch { /* ignore */ }
+
+        _mutex?.Dispose();
+        _mutex = null;
+
         base.OnExit(e);
     }
+
 
     private void StartEnforcementTimer()
     {
