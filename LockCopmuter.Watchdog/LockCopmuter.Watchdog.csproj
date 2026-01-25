@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+		<!-- יעד: לקובץ ה-WPF שיוצא -->
+		<LockCopmuterExe Include="..\LockCopmuter\bin\$(Configuration)\net8.0-windows\LockCopmuter.exe" />
+	</ItemGroup>
+
+	<Target Name="CopyLockCopmuterToWatchdogOutput" AfterTargets="Build">
+		<Message Importance="high" Text="Copying LockCopmuter.exe to Watchdog output..." />
+		<Copy SourceFiles="@(LockCopmuterExe)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(LockCopmuterExe.Identity)')" />
+	</Target>
+
+	<Target Name="BuildAndCopyLockCopmuter" BeforeTargets="Build">
+		<!-- בונה את ה-WPF (ללא ProjectReference) -->
+		<MSBuild Projects="..\LockCopmuter\LockCopmuter.csproj"
+				 Targets="Build"
+				 Properties="Configuration=$(Configuration)" />
+
+		<!-- מעתיק את ה-EXE של ה-WPF לתיקיית ה-OUT של ה-Watchdog -->
+		<ItemGroup>
+			<LockCopmuterExe Include="..\LockCopmuter\bin\$(Configuration)\net8.0-windows\LockCopmuter.exe" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(LockCopmuterExe)"
+			  DestinationFolder="$(OutDir)"
+			  SkipUnchangedFiles="true"
+			  Condition="Exists('%(LockCopmuterExe.Identity)')" />
+	</Target>
+
+</Project>
