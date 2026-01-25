@@ -6,31 +6,32 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
-	<ItemGroup>
-		<!-- יעד: לקובץ ה-WPF שיוצא -->
-		<LockCopmuterExe Include="..\LockCopmuter\bin\$(Configuration)\net8.0-windows\LockCopmuter.exe" />
-	</ItemGroup>
-
-	<Target Name="CopyLockCopmuterToWatchdogOutput" AfterTargets="Build">
-		<Message Importance="high" Text="Copying LockCopmuter.exe to Watchdog output..." />
-		<Copy SourceFiles="@(LockCopmuterExe)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(LockCopmuterExe.Identity)')" />
-	</Target>
 
 	<Target Name="BuildAndCopyLockCopmuter" BeforeTargets="Build">
-		<!-- בונה את ה-WPF (ללא ProjectReference) -->
+		<!-- Build WPF -->
 		<MSBuild Projects="..\LockCopmuter\LockCopmuter.csproj"
 				 Targets="Build"
 				 Properties="Configuration=$(Configuration)" />
 
-		<!-- מעתיק את ה-EXE של ה-WPF לתיקיית ה-OUT של ה-Watchdog -->
+		<!-- Source output folder of WPF -->
+		<PropertyGroup>
+			<_AppOutDir>..\LockCopmuter\bin\$(Configuration)\net8.0-windows\</_AppOutDir>
+		</PropertyGroup>
+
+		<!-- Collect ALL files from WPF output -->
 		<ItemGroup>
-			<LockCopmuterExe Include="..\LockCopmuter\bin\$(Configuration)\net8.0-windows\LockCopmuter.exe" />
+			<_AppFiles Include="$(_AppOutDir)**\*.*" />
 		</ItemGroup>
 
-		<Copy SourceFiles="@(LockCopmuterExe)"
-			  DestinationFolder="$(OutDir)"
-			  SkipUnchangedFiles="true"
-			  Condition="Exists('%(LockCopmuterExe.Identity)')" />
+		<Message Importance="high" Text="Copying WPF output from $(_AppOutDir) to $(OutDir)" />
+
+		<Error Text="WPF output folder not found: $(_AppOutDir)"
+			   Condition="!Exists('$(_AppOutDir)')" />
+
+		<Copy SourceFiles="@(_AppFiles)"
+			  DestinationFiles="@(_AppFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')"
+			  SkipUnchangedFiles="true" />
 	</Target>
+
 
 </Project>

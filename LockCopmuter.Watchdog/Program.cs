@@ -12,6 +12,8 @@ namespace LockCopmuter.Watchdog
         private const string AppExeName = "LockCopmuter.exe";
         private const string AppProcessName = "LockCopmuter"; // בלי .exe
 
+
+
         static void Main(string[] args)
         {
             try
@@ -31,26 +33,27 @@ namespace LockCopmuter.Watchdog
                     return;
                 }
 
-                var exePath = FindExePath(AppExeName);
-                if (exePath == null)
+                // 🔹 מציאת ה-exe
+                var exePath = Path.Combine(AppContext.BaseDirectory, "LockCopmuter.exe");
+                if (!File.Exists(exePath))
                 {
-                    Log($"ERROR: Could not find {AppExeName} near watchdog.");
+                    Log("ERROR: LockCopmuter.exe not found in watchdog directory.");
                     return;
                 }
 
                 Log("Found app path: " + exePath);
 
+                // 🔹 כאן בדיוק הקוד שלך
                 var psi = new ProcessStartInfo
                 {
                     FileName = exePath,
-                    WorkingDirectory = Path.GetDirectoryName(exePath)!,
+                    WorkingDirectory = Path.GetDirectoryName(exePath)!, // חשוב!
                     UseShellExecute = true
                 };
 
                 var p = Process.Start(psi);
                 Log("Process.Start returned: " + (p == null ? "null" : $"PID={p.Id}"));
 
-                // אופציונלי: מחכים רגע כדי לראות אם קרס מיד
                 Thread.Sleep(1500);
                 var running = Process.GetProcessesByName(AppProcessName).Any();
                 Log("After 1.5s running=" + running);
@@ -60,6 +63,7 @@ namespace LockCopmuter.Watchdog
                 Log("FATAL: " + ex);
             }
         }
+
 
         private static string? FindExePath(string exeName)
         {
@@ -99,5 +103,7 @@ namespace LockCopmuter.Watchdog
             }
             catch { /* ignore */ }
         }
+
+
     }
 }
