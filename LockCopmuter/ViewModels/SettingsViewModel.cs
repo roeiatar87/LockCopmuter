@@ -12,6 +12,20 @@ public class SettingsViewModel : INotifyPropertyChanged
     private readonly ILogger _log;
     private readonly IPasswordService _passwordService;
 
+    private string _errorText = "";
+    public string ErrorText
+    {
+        get => _errorText;
+        set { _errorText = value; OnPropertyChanged(); }
+    }
+
+    private bool _hasError;
+    public bool HasError
+    {
+        get => _hasError;
+        set { _hasError = value; OnPropertyChanged(); }
+    }
+
     public ScheduleSettings Settings { get; }
     public ObservableCollection<DayRule> Rules => Settings.Rules;
 
@@ -47,21 +61,21 @@ public class SettingsViewModel : INotifyPropertyChanged
     public DateTime NewExceptionDate
     {
         get => _newExceptionDate;
-        set { _newExceptionDate = value; OnPropertyChanged(); }
+        set { _newExceptionDate = value; OnPropertyChanged(); ClearError(); }
     }
 
     private DateTime _newRangeStart = DateTime.Today;
     public DateTime NewRangeStart
     {
         get => _newRangeStart;
-        set { _newRangeStart = value; OnPropertyChanged(); }
+        set { _newRangeStart = value; OnPropertyChanged(); ClearError(); }
     }
 
     private DateTime _newRangeEnd = DateTime.Today;
     public DateTime NewRangeEnd
     {
         get => _newRangeEnd;
-        set { _newRangeEnd = value; OnPropertyChanged(); }
+        set { _newRangeEnd = value; OnPropertyChanged(); ClearError(); }
     }
 
     private DateTime? _selectedExceptionDate;
@@ -142,6 +156,18 @@ public class SettingsViewModel : INotifyPropertyChanged
         _log.Info("Settings saved.");
     }
 
+    private void SetError(string message)
+    {
+        ErrorText = message;
+        HasError = true;
+    }
+
+    private void ClearError()
+    {
+        ErrorText = "";
+        HasError = false;
+    }
+
     public void TrySetPassword(string newPassword, string confirmPassword)
     {
         if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 4)
@@ -157,14 +183,27 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     private void AddExceptionDate()
     {
+        ClearError();
+
         var d = NewExceptionDate.Date;
 
-        if (!Settings.ExceptionDates.Any(x => x.Date == d))
-            Settings.ExceptionDates.Add(d);
+        var exists = Settings.ExceptionDates.Any(x => x.Date == d);
+        if (exists)
+        {
+            SetError("התאריך הזה כבר קיים ברשימת החריגים.");
+            return;
+        }
+
+        Settings.ExceptionDates.Add(d);
+        ClearError(); // לניקוי הודעה קודמת אם הייתה
     }
+
 
     private void RemoveExceptionDate()
     {
+        ClearError();
+
+
         if (SelectedExceptionDate == null) return;
         var d = SelectedExceptionDate.Value.Date;
 
@@ -177,17 +216,42 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     private void AddExceptionRange()
     {
+        ClearError();
+
         var s = NewRangeStart.Date;
         var e = NewRangeEnd.Date;
 
         if (e < s)
-            throw new InvalidOperationException("טווח לא תקין: תאריך סיום קטן מתאריך התחלה.");
+        {
+            SetError("טווח לא תקין: תאריך סיום קטן מתאריך התחלה.");
+            return;
+        }
 
-        Settings.ExceptionRanges.Add(new DateRange { StartDate = s, EndDate = e });
+        var exists = Settings.ExceptionRanges.Any(r =>
+            r.StartDate.Date == s &&
+            r.EndDate.Date == e);
+
+        if (exists)
+        {
+            SetError("הטווח הזה כבר קיים ברשימה.");
+            return;
+        }
+
+        Settings.ExceptionRanges.Add(new DateRange
+        {
+            StartDate = s,
+            EndDate = e
+        });
+        ClearError(); // ✅ מנקה שגיאות אחרי הצלחה
+
     }
+
+
 
     private void RemoveExceptionRange()
     {
+        ClearError();
+
         if (SelectedExceptionRange == null) return;
         Settings.ExceptionRanges.Remove(SelectedExceptionRange);
         SelectedExceptionRange = null;

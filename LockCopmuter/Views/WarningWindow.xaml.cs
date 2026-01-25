@@ -13,6 +13,15 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
     private string _actionText = "כיבוי"; // ברירת מחדל
     private string _suffixText = "";      // תוספת אופציונלית
 
+    public event EventHandler? CancelWithPasswordRequested;
+
+    private Visibility _cancelVisibility = Visibility.Collapsed;
+    public Visibility CancelVisibility
+    {
+        get => _cancelVisibility;
+        set { _cancelVisibility = value; OnPropertyChanged(); }
+    }
+
     private string _countdownText = "";
     public string CountdownText
     {
@@ -30,13 +39,15 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// יעד ספירה לאחור + טקסט פעולה (למשל "כיבוי", "נעילה") + טקסט תוספת אופציונלי.
+    /// יעד ספירה לאחור + טקסט פעולה (למשל "כיבוי", "תחילת חסימה") + האם לאפשר ביטול עם סיסמה + טקסט תוספת אופציונלי.
     /// </summary>
-    public void Configure(DateTime targetTime, string actionText, string? suffixText = null)
+    public void Configure(DateTime targetTime, string actionText, bool allowCancel, string? suffixText = null)
     {
         _target = targetTime;
         _actionText = string.IsNullOrWhiteSpace(actionText) ? "כיבוי" : actionText;
         _suffixText = suffixText ?? "";
+
+        CancelVisibility = allowCancel ? Visibility.Visible : Visibility.Collapsed;
 
         UpdateText();
         _timer.Start();
@@ -56,6 +67,13 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
 
         CountdownText = $"נותרו {mm:00}:{ss:00} עד {_actionText} ({_target:HH:mm}).{suffix}";
     }
+
+    // כפתור "אישור" (סוגר חלון)
+    private void Ok_Click(object sender, RoutedEventArgs e) => Close();
+
+    // כפתור "בטל (סיסמה)"
+    private void CancelWithPassword_Click(object sender, RoutedEventArgs e)
+        => CancelWithPasswordRequested?.Invoke(this, EventArgs.Empty);
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)

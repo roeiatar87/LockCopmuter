@@ -26,7 +26,7 @@ public partial class App : Application
 
     public App()
     {
-        var warningUi = new WarningUi();
+        var warningUi = new WarningUi(_settingsService, _passwordService);
         _enforcementService = new EnforcementService(_settingsService, _logger, warningUi);
     }
     protected override void OnStartup(StartupEventArgs e)

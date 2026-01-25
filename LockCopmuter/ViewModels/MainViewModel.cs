@@ -75,7 +75,10 @@ public class MainViewModel
 
         if (_passwordService.HasPassword(s))
         {
-            var dlg = new PasswordPromptWindow();
+            var dlg = new PasswordPromptWindow(
+                "גישה להגדרות נעולה",
+                "הזן סיסמה כדי להמשיך"
+            );
             if (dlg.ShowDialog() != true) return;
 
             if (!_passwordService.Verify(s, dlg.Password))

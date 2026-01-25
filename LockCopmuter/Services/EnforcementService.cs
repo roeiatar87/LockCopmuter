@@ -9,8 +9,8 @@ public interface IEnforcementService
 
 public interface IWarningUi
 {
-    void ShowWarning(DateTime restrictionStart, int minutesBefore);
-
+    DateTime? SuppressedUntil { get; }
+    void ShowWarning(DateTime targetTime, int minutesBefore);
     void CloseWarning();
 }
 
@@ -22,7 +22,6 @@ public class EnforcementService : IEnforcementService
     private readonly IWarningUi _warningUi;
     private DateTime? _shutdownAt; // מתי לבצע כיבוי (כדי שהספירה לא תתאפס)
     private DateTime? _lastWarningForStart;       // כדי לא לפתוח אזהרה שוב ושוב (לפני התחלה)
-    private DateTime? _restrictedSince;           // מתי נכנסנו לחסימה כדי לתת "גרייס" לפני כיבוי
     private bool _shutdownIssued;                 // שלא ננסה לכבות שוב ושוב
 
     private const int ShutdownGraceSeconds = 30;  // כמה זמן להציג אזהרה בתוך חלון חסימה לפני כיבוי
@@ -38,6 +37,18 @@ public class EnforcementService : IEnforcementService
     {
         var settings = _settingsService.Load();
         var now = DateTime.Now;
+
+        // אם ההורה ביטל עם סיסמה – לא מבצעים כיבוי עד סוף החלון הנוכחי
+        if (_warningUi.SuppressedUntil.HasValue && now < _warningUi.SuppressedUntil.Value)
+        {
+            // אם אנחנו בתוך חסימה אבל מבוטל – לא מציגים אזהרה ולא מכבים
+            if (settings.IsRestrictedNow(now))
+            {
+                _warningUi.CloseWarning();
+                return;
+            }
+        }
+
 
         // 1) בתוך חסימה
         if (settings.IsRestrictedNow(now))
@@ -76,7 +87,6 @@ public class EnforcementService : IEnforcementService
 
 
         // 2) לא בתוך חסימה: לנקות מצב "בתוך חסימה"
-        _restrictedSince = null;
         _shutdownIssued = false;
 
         // 3) אזהרה לפני תחילת חסימה

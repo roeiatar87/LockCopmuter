@@ -14,6 +14,20 @@ public partial class PasswordPromptWindow : Window, INotifyPropertyChanged
         set { _errorText = value; OnPropertyChanged(); }
     }
 
+    private string _titleText = "נעול";
+    public string TitleText
+    {
+        get => _titleText;
+        set { _titleText = value; OnPropertyChanged(); }
+    }
+
+    private string _subtitleText = "הזן סיסמה כדי להמשיך";
+    public string SubtitleText
+    {
+        get => _subtitleText;
+        set { _subtitleText = value; OnPropertyChanged(); }
+    }
+
     private Visibility _errorVisibility = Visibility.Collapsed;
     public Visibility ErrorVisibility
     {
@@ -81,6 +95,11 @@ public partial class PasswordPromptWindow : Window, INotifyPropertyChanged
         // Enter מאשר גם ב-PwdBox וגם ב-PwdText
         PwdBox.KeyDown += OnEnter;
         PwdText.KeyDown += OnEnter;
+    }
+    public PasswordPromptWindow(string titleText, string subtitleText) : this()
+    {
+        TitleText = titleText;
+        SubtitleText = subtitleText;
     }
 
     private void OnEnter(object? sender, System.Windows.Input.KeyEventArgs e)

@@ -1,6 +1,8 @@
 ﻿using System.Windows;
+using LockCopmuter.Models;
 using LockCopmuter.Views;
 using Application = System.Windows.Application;
+using MessageBox = System.Windows.MessageBox;
 
 namespace LockCopmuter.Services;
 
@@ -8,27 +10,40 @@ public class WarningUi : IWarningUi
 {
     private WarningWindow? _win;
 
+    private readonly ISettingsService _settingsService;
+    private readonly IPasswordService _passwordService;
+
+    public DateTime? SuppressedUntil { get; private set; }
+
+    public WarningUi(ISettingsService settingsService, IPasswordService passwordService)
+    {
+        _settingsService = settingsService;
+        _passwordService = passwordService;
+    }
+
     public void ShowWarning(DateTime targetTime, int minutesBefore)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
             EnsureWindow();
 
-            // minutesBefore == 0 => זה כיבוי עד targetTime (שמגיע מ-EnforcementService)
+            // minutesBefore == 0 => זה כיבוי עד targetTime (ומאפשר ביטול עם סיסמה)
             if (minutesBefore == 0)
             {
                 _win!.Configure(
-                    targetTime: targetTime, // חשוב: לא Now+30
+                    targetTime: targetTime,
                     actionText: "כיבוי",
+                    allowCancel: true,
                     suffixText: "כדי לבטל – נדרשת סיסמה."
                 );
                 return;
             }
 
-            // אחרת => אזהרה עד תחילת חסימה
+            // אחרת => אזהרה עד תחילת חסימה (בלי ביטול)
             _win!.Configure(
                 targetTime: targetTime,
-                actionText: "תחילת חסימה"
+                actionText: "תחילת חסימה",
+                allowCancel: false
             );
         });
     }
@@ -50,6 +65,7 @@ public class WarningUi : IWarningUi
         if (_win == null)
         {
             _win = new WarningWindow();
+            _win.CancelWithPasswordRequested += (_, __) => TryCancelUntilEndOfCurrentWindow();
             _win.Closed += (_, __) => _win = null;
             _win.Show();
         }
@@ -58,5 +74,53 @@ public class WarningUi : IWarningUi
             if (!_win.IsVisible) _win.Show();
             _win.Activate();
         }
+    }
+
+    private void TryCancelUntilEndOfCurrentWindow()
+    {
+        var s = _settingsService.Load();
+
+        if (!_passwordService.HasPassword(s))
+        {
+            MessageBox.Show("לא מוגדרת סיסמה. לא ניתן לבטל חסימה.", "LockCopmuter",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new PasswordPromptWindow(
+    "ביטול חסימה",
+    "הזן סיסמה כדי לבטל את הכיבוי עד סוף חלון החסימה"
+);
+        if (dlg.ShowDialog() != true) return;
+
+        if (!_passwordService.Verify(s, dlg.Password))
+        {
+            MessageBox.Show("סיסמה שגויה.", "נעול", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // ✅ ביטול עד סוף החלון הנוכחי בלבד
+        var now = DateTime.Now;
+        var end = FindCurrentRestrictionEnd(s, now);
+
+        SuppressedUntil = end ?? now.AddMinutes(30); // fallback בטוח
+        _win?.Close();
+    }
+
+    private static DateTime? FindCurrentRestrictionEnd(ScheduleSettings s, DateTime now)
+    {
+        if (s.IsExceptionDay(now.Date)) return null;
+
+        var rule = s.Rules.FirstOrDefault(r => r.Enabled && r.Day == now.DayOfWeek);
+        if (rule == null) return null;
+
+        foreach (var r in rule.Ranges.OrderBy(x => x.Start))
+        {
+            var start = now.Date + r.Start;
+            var end = now.Date + r.End;
+            if (start <= now && now < end) return end;
+        }
+
+        return null;
     }
 }
