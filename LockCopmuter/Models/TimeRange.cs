@@ -1,4 +1,8 @@
-﻿using System.ComponentModel;
+﻿// =========================
+// Models/TimeRange.cs
+// =========================
+using System;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace LockCopmuter.Models;
@@ -9,41 +13,53 @@ public class TimeRange : INotifyPropertyChanged
     public TimeSpan Start
     {
         get => _start;
-        set { _start = value; OnPropertyChanged(); OnPropertyChanged(nameof(StartHour)); OnPropertyChanged(nameof(StartMinute)); }
+        set
+        {
+            _start = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StartHour));
+            OnPropertyChanged(nameof(StartMinute));
+        }
     }
 
     private TimeSpan _end;
     public TimeSpan End
     {
         get => _end;
-        set { _end = value; OnPropertyChanged(); OnPropertyChanged(nameof(EndHour)); OnPropertyChanged(nameof(EndMinute)); }
+        set
+        {
+            _end = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EndHour));
+            OnPropertyChanged(nameof(EndMinute));
+        }
     }
 
-    // Start helpers
     public int StartHour
     {
         get => Start.Hours;
-        set => Start = new TimeSpan(value, Start.Minutes, 0);
+        set => Start = new TimeSpan(Clamp(value, 0, 23), Start.Minutes, 0);
     }
 
     public int StartMinute
     {
         get => Start.Minutes;
-        set => Start = new TimeSpan(Start.Hours, value, 0);
+        set => Start = new TimeSpan(Start.Hours, Clamp(value, 0, 59), 0);
     }
 
-    // End helpers
     public int EndHour
     {
         get => End.Hours;
-        set => End = new TimeSpan(value, End.Minutes, 0);
+        set => End = new TimeSpan(Clamp(value, 0, 23), End.Minutes, 0);
     }
 
     public int EndMinute
     {
         get => End.Minutes;
-        set => End = new TimeSpan(End.Hours, value, 0);
+        set => End = new TimeSpan(End.Hours, Clamp(value, 0, 59), 0);
     }
+
+    private static int Clamp(int v, int min, int max) => v < min ? min : (v > max ? max : v);
 
     public override string ToString() => $"{Start:hh\\:mm}-{End:hh\\:mm}";
 

@@ -1,13 +1,16 @@
-﻿using System.Windows;
+﻿using System;
+using System.IO;
+using System.Threading;
+using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Threading;
 using Application = System.Windows.Application;
 using LockCopmuter.Models;
 using LockCopmuter.Services;
 using LockCopmuter.ViewModels;
 using LockCopmuter.Views;
-using System.Windows.Threading;
 using MessageBox = System.Windows.MessageBox;
-using System.IO;
+
 namespace LockCopmuter;
 
 public partial class App : Application
@@ -16,9 +19,10 @@ public partial class App : Application
     private MainWindow? _mainWindow;
     private Mutex? _mutex;
 
-    private readonly ISettingsService _settingsService = new SettingsService();
-    private readonly ILogger _logger = new FileLogger();
-    private readonly IPasswordService _passwordService = new PasswordService();
+    // ✅ חשוב: לבנות קודם Logger, ואז SettingsService שתלוי בו
+    private readonly ILogger _logger;
+    private readonly ISettingsService _settingsService;
+    private readonly IPasswordService _passwordService;
 
     private ScheduleSettings? _settings;
     private SettingsWindow? _settingsWindow;
@@ -28,16 +32,20 @@ public partial class App : Application
 
     public App()
     {
+        _logger = new FileLogger();
+        _passwordService = new PasswordService();
+        _settingsService = new SettingsService(_logger);   // ✅ עכשיו יש לוגר בפנים
+
         var warningUi = new WarningUi(_settingsService, _passwordService);
         _enforcementService = new EnforcementService(_settingsService, _logger, warningUi);
     }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // ✅ 1) Singleton: לא לאפשר 2 מופעים
         _mutex = new Mutex(true, @"Global\LockCopmuter.App", out bool createdNew);
         if (!createdNew)
         {
-            // כבר רץ מופע אחר
             Shutdown();
             return;
         }
@@ -50,7 +58,6 @@ public partial class App : Application
         SetupTray();
         StartEnforcementTimer();
     }
-
 
     private void SetupTray()
     {
@@ -102,7 +109,7 @@ public partial class App : Application
             {
                 if (!EnsureUnlocked()) return;
 
-                // ✅ 1) סימון סגירה חוקית עבור ה-Watchdog
+                // ✅ סימון סגירה חוקית עבור ה-Watchdog
                 try
                 {
                     var sharedDir = System.IO.Path.Combine(
@@ -122,36 +129,58 @@ public partial class App : Application
                 {
                     _logger.Error("Failed to write exit.flag", ex);
                 }
+
                 if (_tray != null)
                 {
                     _tray.Visible = false;
                     _tray.Dispose();
                     _tray = null;
                 }
-                Shutdown();
 
+                Shutdown();
             });
         });
 
         _tray.ContextMenuStrip = menu;
     }
 
-
     private void ShowMainWindow()
     {
+        _logger.Info("ShowMainWindow invoked.");
+
         if (_mainWindow == null)
         {
+            _logger.Info("Creating MainWindow + MainViewModel.");
             var vm = new MainViewModel(_settingsService, _passwordService, _logger);
             _mainWindow = new MainWindow(vm);
             _mainWindow.Closed += (_, __) => _mainWindow = null;
+
             _mainWindow.Show();
+
+            // ✅ רענון מיידי (גם אם בעתיד תוריד את Refresh מה-ctor)
+            vm.Refresh();
+            _logger.Info("MainViewModel.Refresh invoked (new window).");
         }
         else
         {
+            _logger.Info("MainWindow already exists. Showing/Activating.");
+
             if (!_mainWindow.IsVisible) _mainWindow.Show();
             _mainWindow.Activate();
+
+            // ✅ הכי חשוב: רענון בכל פתיחה מחדש
+            if (_mainWindow.DataContext is MainViewModel vm)
+            {
+                vm.Refresh();
+                _logger.Info("MainViewModel.Refresh invoked (existing window).");
+            }
+            else
+            {
+                _logger.Info("MainWindow.DataContext is not MainViewModel (unexpected).");
+            }
         }
     }
+
 
 
     private bool EnsureUnlocked()
@@ -172,9 +201,9 @@ public partial class App : Application
             MessageBox.Show("סיסמה שגויה.", "נעול",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+
         return ok;
     }
-
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -195,7 +224,6 @@ public partial class App : Application
 
         base.OnExit(e);
     }
-
 
     private void StartEnforcementTimer()
     {
@@ -221,5 +249,4 @@ public partial class App : Application
         // בדיקה מיידית בהפעלה
         _enforcementService.Enforce();
     }
-
 }

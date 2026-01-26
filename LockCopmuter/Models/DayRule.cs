@@ -1,4 +1,8 @@
-﻿using System.Collections.ObjectModel;
+﻿// =========================
+// Models/DayRule.cs
+// =========================
+using System;
+using System.Collections.ObjectModel;
 
 namespace LockCopmuter.Models;
 
@@ -6,6 +10,7 @@ public class DayRule
 {
     public DayOfWeek Day { get; set; }
     public bool Enabled { get; set; } = true;
+
     public ObservableCollection<TimeRange> Ranges { get; set; } = new();
 
     public string DayHebrew => Day switch
@@ -19,4 +24,6 @@ public class DayRule
         DayOfWeek.Saturday => "שבת",
         _ => Day.ToString()
     };
+
+    public override string ToString() => $"{Day} (Enabled={Enabled}, Ranges={Ranges.Count})";
 }

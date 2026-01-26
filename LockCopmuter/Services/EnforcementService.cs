@@ -1,4 +1,6 @@
-﻿using LockCopmuter.Models;
+﻿using System;
+using System.Linq;
+using LockCopmuter.Models;
 
 namespace LockCopmuter.Services;
 
@@ -14,17 +16,17 @@ public interface IWarningUi
     void CloseWarning();
 }
 
-
 public class EnforcementService : IEnforcementService
 {
     private readonly ISettingsService _settingsService;
     private readonly ILogger _logger;
     private readonly IWarningUi _warningUi;
-    private DateTime? _shutdownAt; // מתי לבצע כיבוי (כדי שהספירה לא תתאפס)
-    private DateTime? _lastWarningForStart;       // כדי לא לפתוח אזהרה שוב ושוב (לפני התחלה)
-    private bool _shutdownIssued;                 // שלא ננסה לכבות שוב ושוב
 
-    private const int ShutdownGraceSeconds = 30;  // כמה זמן להציג אזהרה בתוך חלון חסימה לפני כיבוי
+    private DateTime? _shutdownAt;             // יעד כיבוי קבוע (כדי שהספירה לא תתאפס)
+    private DateTime? _lastWarningForStart;    // כדי לא לפתוח לוג/אזהרה שוב ושוב לפני התחלה
+    private bool _shutdownIssued;              // שלא ננסה לכבות שוב ושוב
+
+    private const int ShutdownGraceSeconds = 30;
 
     public EnforcementService(ISettingsService settingsService, ILogger logger, IWarningUi warningUi)
     {
@@ -36,19 +38,25 @@ public class EnforcementService : IEnforcementService
     public void Enforce()
     {
         var settings = _settingsService.Load();
+        settings.Normalize(); // ✅ מגן מכפילויות Rules (כמו יום ראשון) + Normalize חריגים
+
         var now = DateTime.Now;
 
-        // אם ההורה ביטל עם סיסמה – לא מבצעים כיבוי עד סוף החלון הנוכחי
+        // אם ההורה ביטל עם סיסמה – לא מבצעים אזהרה/כיבוי בתוך חסימה עד הזמן שנקבע
         if (_warningUi.SuppressedUntil.HasValue && now < _warningUi.SuppressedUntil.Value)
         {
-            // אם אנחנו בתוך חסימה אבל מבוטל – לא מציגים אזהרה ולא מכבים
             if (settings.IsRestrictedNow(now))
             {
+                // בתוך חסימה אבל "מוחרג זמנית" – לא אזהרה ולא כיבוי
                 _warningUi.CloseWarning();
+
+                // חשוב: לא לקבע shutdownAt בזמן suppression כדי שלא "יתפוס" לנו יעד ישן
+                _shutdownAt = null;
+                _shutdownIssued = false;
+
                 return;
             }
         }
-
 
         // 1) בתוך חסימה
         if (settings.IsRestrictedNow(now))
@@ -60,12 +68,12 @@ public class EnforcementService : IEnforcementService
             if (settings.IsTestMode)
             {
                 _logger.Info("TEST MODE: Restricted time detected – would shutdown after grace (skipped).");
-                _warningUi.ShowWarning(_shutdownAt.Value, 0);
+                _warningUi.ShowWarning(_shutdownAt.Value, minutesBefore: 0);
                 return;
             }
 
             // להציג אזהרה עד מועד הכיבוי הקבוע
-            _warningUi.ShowWarning(_shutdownAt.Value, 0);
+            _warningUi.ShowWarning(_shutdownAt.Value, minutesBefore: 0);
 
             // אם הגיע הזמן – לכבות פעם אחת
             if (!_shutdownIssued && now >= _shutdownAt.Value)
@@ -78,26 +86,21 @@ public class EnforcementService : IEnforcementService
 
             return;
         }
-        else
-        {
-            // יצאנו מחסימה – מאפסים כדי שבפעם הבאה יהיה יעד חדש
-            _shutdownAt = null;
-            _shutdownIssued = false;
-        }
 
-
-        // 2) לא בתוך חסימה: לנקות מצב "בתוך חסימה"
+        // יצאנו מחסימה – מאפסים כדי שבפעם הבאה יהיה יעד חדש
+        _shutdownAt = null;
         _shutdownIssued = false;
 
-        // 3) אזהרה לפני תחילת חסימה
-        var next = FindNextRestrictionStart(settings, now, daysForward: 2);
-        if (next == null)
+        // 2) אזהרה לפני תחילת חסימה
+        var nextStart = FindNextRestrictionStart(settings, now, daysForward: 2);
+        if (nextStart == null)
         {
             _warningUi.CloseWarning();
+            _lastWarningForStart = null;
             return;
         }
 
-        var start = next.Value;
+        var start = nextStart.Value;
         var warnMinutes = Math.Max(1, settings.WarningMinutesBefore);
 
         var warnFrom = start.AddMinutes(-warnMinutes);
@@ -112,12 +115,17 @@ public class EnforcementService : IEnforcementService
                 _logger.Info($"Warning window opened. Restriction starts at {start:yyyy-MM-dd HH:mm}.");
             }
 
-            // כאן targetTime הוא תחילת חסימה עתידית
+            // כאן targetTime הוא תחילת חסימה עתידית (ספירה עד start)
             _warningUi.ShowWarning(start, warnMinutes);
         }
         else
         {
             _warningUi.CloseWarning();
+
+            // אם אנחנו מחוץ לחלון האזהרה, אין צורך “לנעול” את ה-start הקודם
+            // כדי שאם תתקרב שוב לטווח הבא (או ערכו זמנים), נקבל לוג תקין.
+            if (now < warnFrom || now >= warnTo)
+                _lastWarningForStart = null;
         }
     }
 
@@ -126,10 +134,15 @@ public class EnforcementService : IEnforcementService
         for (int d = 0; d <= daysForward; d++)
         {
             var date = now.Date.AddDays(d);
+
             if (settings.IsExceptionDay(date))
                 continue;
 
-            var rule = settings.Rules.FirstOrDefault(r => r.Enabled && r.Day == date.DayOfWeek);
+            // ✅ אחרי Normalize אמור להיות Rule אחד לכל יום, ועדיין בטוח לבחור "האחרון"
+            var rule = settings.Rules
+                .Where(r => r.Enabled && r.Day == date.DayOfWeek)
+                .LastOrDefault();
+
             if (rule == null) continue;
 
             foreach (var r in rule.Ranges.OrderBy(x => x.Start))
@@ -137,10 +150,21 @@ public class EnforcementService : IEnforcementService
                 var start = date + r.Start;
                 var end = date + r.End;
 
-                if (d == 0 && end <= now) continue;
+                // ✅ חציית חצות (למשל 22:00–06:00)
+                if (r.End <= r.Start)
+                    end = date.AddDays(1) + r.End;
 
-                if (start <= now && now < end) return start;
-                if (start > now) return start;
+                // אם זה היום והחלון כבר נגמר – הבא
+                if (d == 0 && end <= now)
+                    continue;
+
+                // אם אנחנו כבר בתוך חלון – ה"start" של החלון הנוכחי
+                if (start <= now && now < end)
+                    return start;
+
+                // חלון עתידי
+                if (start > now)
+                    return start;
             }
         }
 
