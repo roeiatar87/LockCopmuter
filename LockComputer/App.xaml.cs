@@ -51,6 +51,8 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        ClearExitFlagIfExists();
+
         _settings = _settingsService.Load();
         _logger.Info("App started (tray mode).");
 
@@ -58,6 +60,28 @@ public partial class App : Application
         StartEnforcementTimer();
 
         SystemEvents.SessionSwitch += OnSessionSwitch;
+    }
+
+    private void ClearExitFlagIfExists()
+    {
+        try
+        {
+            var sharedDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "LockComputer");
+
+            var flagPath = Path.Combine(sharedDir, "exit.flag");
+
+            if (File.Exists(flagPath))
+            {
+                File.Delete(flagPath);
+                _logger.Info("Cleared stale exit.flag on startup: " + flagPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Failed to clear exit.flag on startup", ex);
+        }
     }
 
     private void SetupTray()

@@ -15,6 +15,8 @@ namespace LockComputer.Watchdog
         private static readonly TimeSpan LegitShutdownWindow = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
+        private static DateTime? _intentionalExitUntil;
+
         static void Main(string[] args)
         {
             using var mutex = new Mutex(
@@ -57,9 +59,15 @@ namespace LockComputer.Watchdog
             if (Process.GetProcessesByName(AppProcessName).Any())
                 return;
 
-            if (IsIntentionalExit())
+            if (IsInsideIntentionalExitWindow())
             {
-                Log("Intentional exit detected -> not restarting app.");
+                Log("Inside intentional exit window -> not restarting app.");
+                return;
+            }
+
+            if (TryConsumeIntentionalExitFlag())
+            {
+                Log("Intentional exit detected from exit.flag -> not restarting app.");
                 return;
             }
 
@@ -85,16 +93,76 @@ namespace LockComputer.Watchdog
             Log("Process.Start returned: " + (p == null ? "null" : $"PID={p.Id}"));
         }
 
-        private static void Log(string msg)
+        private static bool IsInsideIntentionalExitWindow()
         {
+            if (!_intentionalExitUntil.HasValue)
+                return false;
+
+            if (DateTime.Now <= _intentionalExitUntil.Value)
+                return true;
+
+            Log("Intentional exit window expired.");
+            _intentionalExitUntil = null;
+            return false;
+        }
+
+        private static bool TryConsumeIntentionalExitFlag()
+        {
+            var flagPath = Path.Combine(GetSharedDir(), "exit.flag");
+
+            Log("Checking exit flag at: " + flagPath);
+
+            if (!File.Exists(flagPath))
+            {
+                Log("exit.flag not found.");
+                return false;
+            }
+
             try
             {
-                var path = Path.Combine(AppContext.BaseDirectory, "watchdog.log");
-                File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
+                var text = File.ReadAllText(flagPath).Trim();
+                Log("exit.flag content: " + text);
+
+                if (!DateTime.TryParseExact(
+                        text,
+                        "O",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind,
+                        out var when))
+                {
+                    Log("exit.flag parse FAILED.");
+                    File.Delete(flagPath);
+                    return false;
+                }
+
+                var age = DateTime.Now - when;
+                Log($"exit.flag age: {age.TotalSeconds:0}s");
+
+                if (age < TimeSpan.Zero)
+                {
+                    Log("exit.flag timestamp is in the future. Deleting.");
+                    File.Delete(flagPath);
+                    return false;
+                }
+
+                if (age > LegitShutdownWindow)
+                {
+                    Log("exit.flag expired. Deleting.");
+                    File.Delete(flagPath);
+                    return false;
+                }
+
+                _intentionalExitUntil = when + LegitShutdownWindow;
+
+                File.Delete(flagPath);
+                Log($"exit.flag accepted and deleted. Intentional exit window until {_intentionalExitUntil:yyyy-MM-dd HH:mm:ss}.");
+
+                return true;
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore
+                Log("exit.flag read/parse ERROR: " + ex);
+                return false;
             }
         }
 
@@ -139,59 +207,19 @@ namespace LockComputer.Watchdog
                 "LockComputer");
 
             Directory.CreateDirectory(dir);
-
             return dir;
         }
 
-        private static bool IsIntentionalExit()
+        private static void Log(string msg)
         {
-            var flagPath = Path.Combine(GetSharedDir(), "exit.flag");
-
-            Log("Checking exit flag at: " + flagPath);
-
-            if (!File.Exists(flagPath))
-            {
-                Log("exit.flag not found.");
-                return false;
-            }
-
             try
             {
-                var text = File.ReadAllText(flagPath).Trim();
-                Log("exit.flag content: " + text);
-
-                if (!DateTime.TryParseExact(
-                        text,
-                        "O",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.RoundtripKind,
-                        out var when))
-                {
-                    Log("exit.flag parse FAILED.");
-                    File.Delete(flagPath);
-                    return false;
-                }
-
-                var age = DateTime.Now - when;
-                Log($"exit.flag age: {age.TotalSeconds:0}s");
-
-                var isRecent = age >= TimeSpan.Zero && age <= LegitShutdownWindow;
-
-                File.Delete(flagPath);
-
-                if (isRecent)
-                {
-                    Log("exit.flag accepted and deleted.");
-                    return true;
-                }
-
-                Log("exit.flag expired and deleted.");
-                return false;
+                var path = Path.Combine(AppContext.BaseDirectory, "watchdog.log");
+                File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
             }
-            catch (Exception ex)
+            catch
             {
-                Log("exit.flag read/parse ERROR: " + ex);
-                return false;
+                // ignore
             }
         }
     }
