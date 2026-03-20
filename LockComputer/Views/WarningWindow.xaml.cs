@@ -10,10 +10,12 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     private DateTime _target;
-    private string _actionText = "כיבוי"; // ברירת מחדל
-    private string _suffixText = "";      // תוספת אופציונלית
+    private string _actionText = "אכיפה";
+    private string _suffixText = "";
+    private bool _countdownFinishedRaised;
 
     public event EventHandler? CancelWithPasswordRequested;
+    public event EventHandler? CountdownFinished;
 
     private Visibility _cancelVisibility = Visibility.Collapsed;
     public Visibility CancelVisibility
@@ -38,14 +40,12 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
         Closing += (_, __) => _timer.Stop();
     }
 
-    /// <summary>
-    /// יעד ספירה לאחור + טקסט פעולה (למשל "כיבוי", "תחילת חסימה") + האם לאפשר ביטול עם סיסמה + טקסט תוספת אופציונלי.
-    /// </summary>
     public void Configure(DateTime targetTime, string actionText, bool allowCancel, string? suffixText = null)
     {
         _target = targetTime;
-        _actionText = string.IsNullOrWhiteSpace(actionText) ? "כיבוי" : actionText;
+        _actionText = string.IsNullOrWhiteSpace(actionText) ? "אכיפה" : actionText;
         _suffixText = suffixText ?? "";
+        _countdownFinishedRaised = false;
 
         CancelVisibility = allowCancel ? Visibility.Visible : Visibility.Collapsed;
 
@@ -56,22 +56,38 @@ public partial class WarningWindow : Window, INotifyPropertyChanged
     private void UpdateText()
     {
         var remaining = _target - DateTime.Now;
-        if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
 
-        // סה"כ שניות -> mm:ss אמיתי
+        if (remaining <= TimeSpan.Zero)
+        {
+            remaining = TimeSpan.Zero;
+
+            CountdownText = BuildCountdownText(0);
+
+            if (!_countdownFinishedRaised)
+            {
+                _countdownFinishedRaised = true;
+                _timer.Stop();
+                CountdownFinished?.Invoke(this, EventArgs.Empty);
+            }
+
+            return;
+        }
+
         var totalSeconds = (int)Math.Ceiling(remaining.TotalSeconds);
+        CountdownText = BuildCountdownText(totalSeconds);
+    }
+
+    private string BuildCountdownText(int totalSeconds)
+    {
         var mm = totalSeconds / 60;
         var ss = totalSeconds % 60;
 
         var suffix = string.IsNullOrWhiteSpace(_suffixText) ? "" : $" {_suffixText}";
-
-        CountdownText = $"נותרו {mm:00}:{ss:00} עד {_actionText} ({_target:HH:mm}).{suffix}";
+        return $"נותרו {mm:00}:{ss:00} עד {_actionText} ({_target:HH:mm}).{suffix}";
     }
 
-    // כפתור "אישור" (סוגר חלון)
     private void Ok_Click(object sender, RoutedEventArgs e) => Close();
 
-    // כפתור "בטל (סיסמה)"
     private void CancelWithPassword_Click(object sender, RoutedEventArgs e)
         => CancelWithPasswordRequested?.Invoke(this, EventArgs.Empty);
 

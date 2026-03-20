@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System;
+using System.Linq;
+using System.Windows;
 using LockComputer.Models;
 using LockComputer.Views;
 using Application = System.Windows.Application;
@@ -15,6 +17,8 @@ public class WarningUi : IWarningUi
 
     public DateTime? SuppressedUntil { get; private set; }
 
+    public event EventHandler? CountdownFinished;
+
     public WarningUi(ISettingsService settingsService, IPasswordService passwordService)
     {
         _settingsService = settingsService;
@@ -27,19 +31,20 @@ public class WarningUi : IWarningUi
         {
             EnsureWindow();
 
-            // minutesBefore == 0 => זו נעילה עד targetTime
+            var settings = _settingsService.Load();
+            var actionText = GetActionText(settings.EnforcementMode);
+
             if (minutesBefore == 0)
             {
                 _win!.Configure(
                     targetTime: targetTime,
-                    actionText: "נעילת מחשב",
+                    actionText: actionText,
                     allowCancel: true,
-                    suffixText: "כדי לבטל את הנעילה האוטומטית - נדרשת סיסמה."
+                    suffixText: "כדי לבטל את האכיפה האוטומטית - נדרשת סיסמה."
                 );
                 return;
             }
 
-            // אחרת => אזהרה עד תחילת חסימה עתידית
             _win!.Configure(
                 targetTime: targetTime,
                 actionText: "תחילת חסימה",
@@ -66,6 +71,7 @@ public class WarningUi : IWarningUi
         {
             _win = new WarningWindow();
             _win.CancelWithPasswordRequested += (_, __) => TryCancelUntilEndOfCurrentWindow();
+            _win.CountdownFinished += (_, __) => CountdownFinished?.Invoke(this, EventArgs.Empty);
             _win.Closed += (_, __) => _win = null;
             _win.Show();
         }
@@ -87,12 +93,15 @@ public class WarningUi : IWarningUi
             return;
         }
 
+        var cancelText = GetCancelActionText(s.EnforcementMode);
+
         var dlg = new PasswordPromptWindow(
             "ביטול חסימה",
-            "הזן סיסמה כדי לבטל את הנעילה האוטומטית עד סוף חלון החסימה"
+            $"הזן סיסמה כדי {cancelText} עד סוף חלון החסימה"
         );
 
-        if (dlg.ShowDialog() != true) return;
+        if (dlg.ShowDialog() != true)
+            return;
 
         if (!_passwordService.Verify(s, dlg.Password))
         {
@@ -107,12 +116,26 @@ public class WarningUi : IWarningUi
         _win?.Close();
     }
 
+    private static string GetActionText(EnforcementMode mode) => mode switch
+    {
+        EnforcementMode.CloseRoblox => "סגירת Roblox",
+        _ => "נעילת מחשב"
+    };
+
+    private static string GetCancelActionText(EnforcementMode mode) => mode switch
+    {
+        EnforcementMode.CloseRoblox => "לבטל את סגירת Roblox האוטומטית",
+        _ => "לבטל את נעילת המחשב האוטומטית"
+    };
+
     private static DateTime? FindCurrentRestrictionEnd(ScheduleSettings s, DateTime now)
     {
-        if (s.IsExceptionDay(now.Date)) return null;
+        if (s.IsExceptionDay(now.Date))
+            return null;
 
         var rule = s.Rules.FirstOrDefault(r => r.Enabled && r.Day == now.DayOfWeek);
-        if (rule == null) return null;
+        if (rule == null)
+            return null;
 
         foreach (var r in rule.Ranges.OrderBy(x => x.Start))
         {

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using LockComputer.Models;
@@ -13,6 +14,7 @@ public interface IEnforcementService
 public interface IWarningUi
 {
     DateTime? SuppressedUntil { get; }
+    event EventHandler? CountdownFinished;
     void ShowWarning(DateTime targetTime, int minutesBefore);
     void CloseWarning();
 }
@@ -23,21 +25,20 @@ public class EnforcementService : IEnforcementService
     private readonly ILogger _logger;
     private readonly IWarningUi _warningUi;
 
-    private DateTime? _lockAt;
+    private DateTime? _enforceAt;
     private DateTime? _lastWarningForStart;
-
-    private bool _initialLockIssued;
-    private bool _isInRelockCountdown;
-    private DateTime? _relockAt;
+    private bool _initialEnforcementIssued;
 
     private const int LockGraceSeconds = 30;
-    private const int RelockGraceSeconds = 10;
+    private const int RobloxGraceSeconds = 10;
 
     public EnforcementService(ISettingsService settingsService, ILogger logger, IWarningUi warningUi)
     {
         _settingsService = settingsService;
         _logger = logger;
         _warningUi = warningUi;
+
+        _warningUi.CountdownFinished += OnWarningCountdownFinished;
     }
 
     public void Enforce()
@@ -52,71 +53,27 @@ public class EnforcementService : IEnforcementService
             if (settings.IsRestrictedNow(now))
             {
                 _warningUi.CloseWarning();
-
-                _lockAt = null;
-                _relockAt = null;
-                _initialLockIssued = false;
-                _isInRelockCountdown = false;
-
+                ResetEnforcementState();
                 return;
             }
         }
 
         if (settings.IsRestrictedNow(now))
         {
-            if (settings.IsTestMode)
+            switch (settings.EnforcementMode)
             {
-                _lockAt ??= now.AddSeconds(LockGraceSeconds);
-                _logger.Info("TEST MODE: Restricted time detected - would lock after grace (skipped).");
-                _warningUi.ShowWarning(_lockAt.Value, minutesBefore: 0);
-                return;
+                case EnforcementMode.CloseRoblox:
+                    EnforceCloseRoblox(settings, now);
+                    return;
+
+                case EnforcementMode.LockComputer:
+                default:
+                    EnforceLockComputer(settings, now);
+                    return;
             }
-
-            // נעילה ראשונה
-            if (!_initialLockIssued)
-            {
-                _lockAt ??= now.AddSeconds(LockGraceSeconds);
-                _warningUi.ShowWarning(_lockAt.Value, minutesBefore: 0);
-
-                if (now >= _lockAt.Value)
-                {
-                    _initialLockIssued = true;
-                    _lockAt = null;
-                    _warningUi.CloseWarning();
-                    _logger.Info("Restricted time detected - locking now (after initial grace).");
-                    LockNow();
-                }
-
-                return;
-            }
-
-            // אם כבר הייתה נעילה ראשונה, מתחילים בכל פעם מחדש ספירת relock
-            if (!_isInRelockCountdown)
-            {
-                _relockAt = now.AddSeconds(RelockGraceSeconds);
-                _isInRelockCountdown = true;
-                _logger.Info($"Restricted time still active - relock warning opened. Relocking at {_relockAt:yyyy-MM-dd HH:mm:ss}.");
-            }
-
-            _warningUi.ShowWarning(_relockAt!.Value, minutesBefore: 0);
-
-            if (now >= _relockAt.Value)
-            {
-                _warningUi.CloseWarning();
-                _isInRelockCountdown = false;
-                _relockAt = null;
-
-                _logger.Info("Restricted time still active - locking again after relock warning.");
-                LockNow();
-            }
-
-            return;
         }
 
-        _lockAt = null;
-        _relockAt = null;
-        _initialLockIssued = false;
-        _isInRelockCountdown = false;
+        ResetEnforcementState();
 
         var nextStart = FindNextRestrictionStart(settings, now, daysForward: 2);
         if (nextStart == null)
@@ -149,6 +106,142 @@ public class EnforcementService : IEnforcementService
             if (now < warnFrom || now >= warnTo)
                 _lastWarningForStart = null;
         }
+    }
+
+    private void OnWarningCountdownFinished(object? sender, EventArgs e)
+    {
+        try
+        {
+            var settings = _settingsService.Load();
+            settings.Normalize();
+
+            var now = DateTime.Now;
+
+            if (!settings.IsRestrictedNow(now))
+            {
+                _logger.Info("Warning countdown finished, but restriction is no longer active.");
+                ResetEnforcementState();
+                _warningUi.CloseWarning();
+                return;
+            }
+
+            if (_warningUi.SuppressedUntil.HasValue && now < _warningUi.SuppressedUntil.Value)
+            {
+                _logger.Info("Warning countdown finished, but enforcement is currently suppressed.");
+                ResetEnforcementState();
+                _warningUi.CloseWarning();
+                return;
+            }
+
+            switch (settings.EnforcementMode)
+            {
+                case EnforcementMode.CloseRoblox:
+                    if (!IsRobloxRunning())
+                    {
+                        _logger.Info("Warning countdown finished, but Roblox is no longer running.");
+                        ResetEnforcementState();
+                        _warningUi.CloseWarning();
+                        return;
+                    }
+
+                    _logger.Info("Warning countdown finished - closing Roblox immediately.");
+                    _warningUi.CloseWarning();
+                    _enforceAt = null;
+                    _initialEnforcementIssued = false;
+                    CloseRobloxNow();
+                    break;
+
+                case EnforcementMode.LockComputer:
+                default:
+                    _logger.Info("Warning countdown finished - locking computer immediately.");
+                    _warningUi.CloseWarning();
+                    _enforceAt = null;
+                    _initialEnforcementIssued = true;
+                    LockNow();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Immediate enforcement after warning countdown failed.", ex);
+        }
+    }
+
+    private void EnforceLockComputer(ScheduleSettings settings, DateTime now)
+    {
+        if (settings.IsTestMode)
+        {
+            _enforceAt ??= now.AddSeconds(LockGraceSeconds);
+            _logger.Info("TEST MODE: Restricted time detected - would enforce after grace (skipped).");
+            _warningUi.ShowWarning(_enforceAt.Value, minutesBefore: 0);
+            return;
+        }
+
+        if (!_initialEnforcementIssued)
+        {
+            _enforceAt ??= now.AddSeconds(LockGraceSeconds);
+            _warningUi.ShowWarning(_enforceAt.Value, minutesBefore: 0);
+
+            if (now >= _enforceAt.Value)
+            {
+                _initialEnforcementIssued = true;
+                _enforceAt = null;
+                _warningUi.CloseWarning();
+                _logger.Info("Restricted time detected - locking computer now.");
+                LockNow();
+            }
+
+            return;
+        }
+
+        _enforceAt ??= now.AddSeconds(LockGraceSeconds);
+        _warningUi.ShowWarning(_enforceAt.Value, minutesBefore: 0);
+
+        if (now >= _enforceAt.Value)
+        {
+            _enforceAt = null;
+            _warningUi.CloseWarning();
+            _logger.Info("Restricted time still active - locking computer again.");
+            LockNow();
+        }
+    }
+
+    private void EnforceCloseRoblox(ScheduleSettings settings, DateTime now)
+    {
+        if (!IsRobloxRunning())
+        {
+            _warningUi.CloseWarning();
+            _enforceAt = null;
+            _initialEnforcementIssued = false;
+            return;
+        }
+
+        if (settings.IsTestMode)
+        {
+            _enforceAt ??= now.AddSeconds(RobloxGraceSeconds);
+            _logger.Info("TEST MODE: Roblox detected during restriction - would close after grace (skipped).");
+            _warningUi.ShowWarning(_enforceAt.Value, minutesBefore: 0);
+            return;
+        }
+
+        _enforceAt ??= now.AddSeconds(RobloxGraceSeconds);
+        _warningUi.ShowWarning(_enforceAt.Value, minutesBefore: 0);
+
+        if (now >= _enforceAt.Value)
+        {
+            _warningUi.CloseWarning();
+            _enforceAt = null;
+            _initialEnforcementIssued = false;
+
+            _logger.Info("Roblox detected during restriction - closing now.");
+            CloseRobloxNow();
+        }
+    }
+
+    private void ResetEnforcementState()
+    {
+        _enforceAt = null;
+        _initialEnforcementIssued = false;
     }
 
     private static DateTime? FindNextRestrictionStart(ScheduleSettings settings, DateTime now, int daysForward)
@@ -188,11 +281,68 @@ public class EnforcementService : IEnforcementService
         return null;
     }
 
+    private static bool IsRobloxRunning()
+    {
+        var processNames = new[]
+        {
+            "RobloxPlayerBeta",
+            "RobloxGameClient"
+        };
+
+        return processNames.Any(name => Process.GetProcessesByName(name).Any());
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool LockWorkStation();
 
     private void LockNow()
     {
         LockWorkStation();
+    }
+
+    private void CloseRobloxNow()
+    {
+        try
+        {
+            var processNames = new[]
+            {
+                "RobloxPlayerBeta",
+                "RobloxGameClient"
+            };
+
+            var anyFound = false;
+
+            foreach (var name in processNames)
+            {
+                foreach (var process in Process.GetProcessesByName(name))
+                {
+                    anyFound = true;
+
+                    try
+                    {
+                        if (process.HasExited)
+                            continue;
+
+                        process.CloseMainWindow();
+
+                        if (!process.WaitForExit(500) && !process.HasExited)
+                            process.Kill(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to close Roblox process '{name}'.", ex);
+                    }
+                }
+            }
+
+            if (anyFound)
+                _logger.Info("Roblox processes were closed due to active restriction.");
+            else
+                _logger.Info("Restriction active, but no Roblox process was found.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Failed to close Roblox.", ex);
+        }
     }
 }

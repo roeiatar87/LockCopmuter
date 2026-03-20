@@ -12,7 +12,6 @@
         Background="#0F172A">
 
     <Window.Resources>
-        <!-- Brushes (כמו אצלך) -->
         <SolidColorBrush x:Key="TextMain" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
         <SolidColorBrush x:Key="Card" Color="#111827"/>
@@ -24,7 +23,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
         </Style>
 
-        <!-- Button Style עם Hover -->
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
             <Setter Property="Background" Value="{StaticResource BtnSecondary}"/>
@@ -79,39 +77,33 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Header -->
                 <TextBlock Text="אזהרה"
                            Foreground="{StaticResource TextMain}"
                            FontSize="16"
                            FontWeight="Bold"/>
 
-                <!-- Countdown -->
                 <TextBlock Grid.Row="2"
                            Text="{Binding CountdownText}"
                            Foreground="#E2E8F0"
                            FontSize="14"
                            TextWrapping="Wrap"/>
 
-                <!-- Tip -->
                 <TextBlock Grid.Row="4"
-                           Text="שמור עבודה וסגור תוכנות פתוחות."
+                           Text="שמור עבודה במידת הצורך."
                            Foreground="{StaticResource TextMuted}"
                            TextWrapping="Wrap"/>
 
-                <!-- Buttons -->
                 <StackPanel Grid.Row="5"
                             Orientation="Horizontal"
                             HorizontalAlignment="Left"
                             Margin="0,14,0,0">
 
-                    <!-- סגור -->
                     <Button Content="אישור"
                             Width="120"
                             Height="38"
                             Background="{StaticResource BtnPrimary}"
                             Click="Ok_Click"/>
 
-                    <!-- ביטול עם סיסמה -->
                     <Button Content="בטל (סיסמה)"
                             Width="140"
                             Height="38"

@@ -29,6 +29,31 @@ public class SettingsViewModel : INotifyPropertyChanged
     public ScheduleSettings Settings { get; }
     public ObservableCollection<DayRule> Rules => Settings.Rules;
 
+    public IReadOnlyList<EnforcementModeOption> EnforcementModeOptions { get; } =
+        new List<EnforcementModeOption>
+        {
+            new() { Value = EnforcementMode.LockComputer, Text = "נעילת מחשב" },
+            new() { Value = EnforcementMode.CloseRoblox, Text = "סגירת Roblox" }
+        };
+
+    private EnforcementModeOption? _selectedEnforcementModeOption;
+    public EnforcementModeOption? SelectedEnforcementModeOption
+    {
+        get => _selectedEnforcementModeOption;
+        set
+        {
+            if (value == null)
+                return;
+
+            if (_selectedEnforcementModeOption != value)
+            {
+                _selectedEnforcementModeOption = value;
+                Settings.EnforcementMode = value.Value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     private DayRule? _selectedDay;
     public DayRule? SelectedDay
     {
@@ -41,9 +66,9 @@ public class SettingsViewModel : INotifyPropertyChanged
             RemoveRangeCommand.RaiseCanExecuteChanged();
         }
     }
+
     public IReadOnlyList<int> Hours { get; } = Enumerable.Range(0, 24).ToList();
     public IReadOnlyList<int> Minutes { get; } = Enumerable.Range(0, 60).Where(m => m % 5 == 0).ToList();
-
 
     private TimeRange? _selectedRange;
     public TimeRange? SelectedRange
@@ -82,21 +107,30 @@ public class SettingsViewModel : INotifyPropertyChanged
     public DateTime? SelectedExceptionDate
     {
         get => _selectedExceptionDate;
-        set { _selectedExceptionDate = value; OnPropertyChanged(); RemoveExceptionDateCommand.RaiseCanExecuteChanged(); }
+        set
+        {
+            _selectedExceptionDate = value;
+            OnPropertyChanged();
+            RemoveExceptionDateCommand.RaiseCanExecuteChanged();
+        }
     }
 
     private DateRange? _selectedExceptionRange;
     public DateRange? SelectedExceptionRange
     {
         get => _selectedExceptionRange;
-        set { _selectedExceptionRange = value; OnPropertyChanged(); RemoveExceptionRangeCommand.RaiseCanExecuteChanged(); }
+        set
+        {
+            _selectedExceptionRange = value;
+            OnPropertyChanged();
+            RemoveExceptionRangeCommand.RaiseCanExecuteChanged();
+        }
     }
 
     public RelayCommand AddExceptionDateCommand { get; }
     public RelayCommand RemoveExceptionDateCommand { get; }
     public RelayCommand AddExceptionRangeCommand { get; }
     public RelayCommand RemoveExceptionRangeCommand { get; }
-
 
     public RelayCommand AddRangeCommand { get; }
     public RelayCommand RemoveRangeCommand { get; }
@@ -116,6 +150,10 @@ public class SettingsViewModel : INotifyPropertyChanged
 
         SelectedDay = Rules.FirstOrDefault();
 
+        _selectedEnforcementModeOption =
+            EnforcementModeOptions.FirstOrDefault(x => x.Value == Settings.EnforcementMode)
+            ?? EnforcementModeOptions.FirstOrDefault();
+
         _log.Info("Settings window opened.");
 
         AddExceptionDateCommand = new RelayCommand(AddExceptionDate);
@@ -123,19 +161,23 @@ public class SettingsViewModel : INotifyPropertyChanged
 
         AddExceptionRangeCommand = new RelayCommand(AddExceptionRange);
         RemoveExceptionRangeCommand = new RelayCommand(RemoveExceptionRange, () => SelectedExceptionRange != null);
-
     }
-
 
     private void AddRange()
     {
         if (SelectedDay == null) return;
-        SelectedDay.Ranges.Add(new TimeRange { Start = new TimeSpan(15, 0, 0), End = new TimeSpan(17, 0, 0) });
+
+        SelectedDay.Ranges.Add(new TimeRange
+        {
+            Start = new TimeSpan(15, 0, 0),
+            End = new TimeSpan(17, 0, 0)
+        });
     }
 
     private void RemoveRange()
     {
         if (SelectedDay == null || SelectedRange == null) return;
+
         SelectedDay.Ranges.Remove(SelectedRange);
         SelectedRange = null;
     }
@@ -199,14 +241,12 @@ public class SettingsViewModel : INotifyPropertyChanged
         }
 
         Settings.ExceptionDates.Add(d);
-        ClearError(); // לניקוי הודעה קודמת אם הייתה
+        ClearError();
     }
-
 
     private void RemoveExceptionDate()
     {
         ClearError();
-
 
         if (SelectedExceptionDate == null) return;
         var d = SelectedExceptionDate.Value.Date;
@@ -246,23 +286,22 @@ public class SettingsViewModel : INotifyPropertyChanged
             StartDate = s,
             EndDate = e
         });
-        ClearError(); // ✅ מנקה שגיאות אחרי הצלחה
 
+        ClearError();
     }
-
-
 
     private void RemoveExceptionRange()
     {
         ClearError();
 
         if (SelectedExceptionRange == null) return;
+
         Settings.ExceptionRanges.Remove(SelectedExceptionRange);
         SelectedExceptionRange = null;
     }
 
-
     public event PropertyChangedEventHandler? PropertyChanged;
+
     private void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

@@ -12,6 +12,8 @@ namespace LockComputer.Models
         public int WarningMinutesBefore { get; set; } = 5;
         public bool IsTestMode { get; set; } = false;
 
+        public EnforcementMode EnforcementMode { get; set; } = EnforcementMode.LockComputer;
+
         public ObservableCollection<DateTime> ExceptionDates { get; set; } = new();
         public ObservableCollection<DateRange> ExceptionRanges { get; set; } = new();
 
